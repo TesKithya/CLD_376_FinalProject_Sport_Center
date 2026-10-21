@@ -64,8 +64,10 @@ services:
     networks:
       - backend
     depends_on:
-      - api-gateway-1
-      - api-gateway-2
+      api-gateway-1:
+        condition: service_healthy
+      api-gateway-2:
+        condition: service_healthy
 
 networks:
   backend:
