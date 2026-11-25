@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reservation-service
+  namespace: sports-center
+  labels: { app: reservation-service }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: reservation-service }
+  template:
+    metadata:
+      labels: { app: reservation-service }
+    spec:
+      containers:
+      # ---- main application container (writes access log to the shared volume) ----
+      - name: app
+        image: sports/reservation-service:1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3004
+        env:
+        - name: MONGO_USER
+          valueFrom:
+            secretKeyRef: { name: sports-secrets, key: MONGO_USER }
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef: { name: sports-secrets, key: MONGO_PASSWORD }
+        - name: MONGO_HOST
+          valueFrom:
+            secretKeyRef: { name: sports-secrets, key: MONGO_HOST }
+        - name: MONGO_URI
+          value: "mongodb+srv://$(MONGO_USER):$(MONGO_PASSWORD)@$(MONGO_HOST)/reservation_db?retryWrites=true&w=majority"
+        - name: PORT
+          value: "3004"
+        - name: INTERNAL_API_KEY
+          valueFrom:
+            secretKeyRef: { name: sports-secrets, key: INTERNAL_API_KEY }
+        - name: FACILITY_URL
+          valueFrom:
+            configMapKeyRef: { name: sports-config, key: FACILITY_URL }
+        - name: MAINTENANCE_URL
+          valueFrom:
+            configMapKeyRef: { name: sports-config, key: MAINTENANCE_URL }
+        - name: MATCHING_URL
+          valueFrom:
+            configMapKeyRef: { name: sports-config, key: MATCHING_URL }
+        - name: MAX_BOOKING_HOURS
+          valueFrom:
+            configMapKeyRef: { name: sports-config, key: MAX_BOOKING_HOURS }
+        - name: LOG_DIR
+          valueFrom:
+            configMapKeyRef: { name: sports-config, key: LOG_DIR }
+        volumeMounts:
+        - name: app-logs
+          mountPath: /var/log/app
+        readinessProbe:
+          httpGet: { path: /health, port: 3004 }
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 6
+        livenessProbe:
+          httpGet: { path: /health, port: 3004 }
+          initialDelaySeconds: 40
+          periodSeconds: 20
+          failureThreshold: 5
+        resources:
+          requests: { cpu: 50m, memory: 96Mi }
+          limits: { cpu: 300m, memory: 256Mi }
+      # ---- second container reading the SAME volume (demonstrates shared storage) ----
+      - name: log-reader
+        image: busybox:1.36
+        command: ["sh", "-c", "touch /logs/reservation-service.log; tail -n+1 -F /logs/reservation-service.log"]
+        volumeMounts:
+        - name: app-logs
+          mountPath: /logs
+          readOnly: true
+        resources:
+          requests: { cpu: 5m, memory: 8Mi }
+          limits: { cpu: 50m, memory: 32Mi }
+      volumes:
+      - name: app-logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reservation-service
+  namespace: sports-center
+spec:
+  type: ClusterIP
+  selector: { app: reservation-service }
+  ports:
+  - port: 3004
+    targetPort: 3004

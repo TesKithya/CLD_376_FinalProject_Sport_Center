@@ -52,7 +52,83 @@ Everything is reached through **http://localhost:3000**. The `.env` files ship w
 4. Others browse `GET /api/matching/matches?type=badminton` and `POST /api/matching/matches/:id/join` (optionally `{ "groupId": "..." }`).
 5. Staff schedules repairs: `POST /api/maintenance` — conflicting reservations return 409 unless `force: true`.
 
-Full endpoint tables are in each service's README.
+## API endpoints
+
+All client traffic goes to **http://localhost:3000** (nginx load balancer → two API Gateway instances). Send `Authorization: Bearer <token>` on every protected route. Any path containing `/internal` is blocked at the gateway (404). Per-service details are in each service's README.
+
+### Gateway
+| Method | Path | Access |
+|---|---|---|
+| GET | `/health` | Public |
+| GET | `/health/services` | Public — aggregated status of all downstream services (503 if any is not `up`) |
+
+### Auth — `/api/auth` (rate limit: 50 requests / 15 min)
+| Method | Path | Access | Handled by |
+|---|---|---|---|
+| POST | `/api/auth/register` | Public | Registration `/register` |
+| POST | `/api/auth/login` | Public | Authentication `/login` |
+| GET | `/api/auth/me` | Authenticated | Authentication `/me` |
+
+`register` accepts `name, email, password (min 8), phone, role, staffCode`. Everyone is a `customer` unless `role: "admin"` is sent with a valid `staffCode` (`STAFF_SIGNUP_CODE`).
+
+### Facilities — `/api/facilities`
+| Method | Path | Access |
+|---|---|---|
+| GET | `/api/facilities` | Authenticated |
+| GET | `/api/facilities/:id` | Authenticated |
+| POST | `/api/facilities` | Admin |
+| PUT | `/api/facilities/:id` | Admin |
+| PATCH | `/api/facilities/:id/status` | Admin |
+| DELETE | `/api/facilities/:id` | Admin |
+
+### Reservations — `/api/reservations`
+| Method | Path | Access |
+|---|---|---|
+| GET | `/api/reservations/availability` | Authenticated |
+| GET | `/api/reservations/my` | Authenticated |
+| GET | `/api/reservations` | Admin |
+| POST | `/api/reservations` | Authenticated |
+| GET | `/api/reservations/:id` | Authenticated (ownership / staff rules enforced in the service) |
+| PATCH | `/api/reservations/:id/cancel` | Authenticated |
+| PATCH | `/api/reservations/:id/matching` | Authenticated |
+
+### Matching — `/api/matching` (all Authenticated)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/matching/matches` | List open matches |
+| GET | `/api/matching/matches/mine` | My matches |
+| GET | `/api/matching/matches/:id` | Match details |
+| POST | `/api/matching/matches/:id/join` | Join a match (optional `groupId`) |
+| POST | `/api/matching/matches/:id/leave` | Leave a match |
+| POST | `/api/matching/groups` | Create a group |
+| GET | `/api/matching/groups` | List groups |
+| GET | `/api/matching/groups/:id` | Group details |
+| POST | `/api/matching/groups/:id/join` | Join a group |
+| POST | `/api/matching/groups/:id/leave` | Leave a group |
+| DELETE | `/api/matching/groups/:id` | Delete a group |
+
+### Maintenance — `/api/maintenance` (Admin only)
+| Method | Path |
+|---|---|
+| POST | `/api/maintenance` |
+| GET | `/api/maintenance` |
+| GET | `/api/maintenance/:id` |
+| PUT | `/api/maintenance/:id` |
+| PATCH | `/api/maintenance/:id/status` |
+
+### Internal endpoints (service-to-service only, never exposed through the gateway)
+| Service (port) | Method | Path | Purpose |
+|---|---|---|---|
+| Registration (3001) | POST | `/internal/verify` | Credential check, called by Authentication |
+| Registration (3001) | GET | `/internal/users/:id` | User lookup |
+| Authentication (3002) | POST | `/verify` | JWT verification |
+| Reservation (3004) | GET | `/internal/conflicts` | Find reservations conflicting with a slot |
+| Reservation (3004) | POST | `/internal/cancel-conflicts` | Cancel conflicting reservations (maintenance `force`) |
+| Matching (3005) | POST | `/internal/matches` | Create/update a match from a reservation |
+| Matching (3005) | POST | `/internal/matches/reservation/:reservationId/close` | Close the match when its reservation is cancelled |
+| Maintenance (3006) | GET | `/facility/:facilityId/check` | Is the facility under maintenance? (`system` role) |
+
+Every service also exposes its own `GET /health`.
 
 ## Known limitations / next steps
 - **No notification service:** participants aren't told when a session is cancelled (the match just flips to `cancelled`). A message queue (RabbitMQ/Kafka) would replace the synchronous HTTP calls and enable this.

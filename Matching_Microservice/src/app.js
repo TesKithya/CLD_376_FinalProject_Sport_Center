@@ -13,6 +13,15 @@ const app = express();
 app.use(helmet());
 app.use(express.json({ limit: '100kb' }));
 app.use(morgan('tiny'));
+// Also write access logs to a file when LOG_DIR is set (Kubernetes shared volume).
+if (process.env.LOG_DIR) {
+  const fs = require('fs');
+  const path = require('path');
+  fs.mkdirSync(process.env.LOG_DIR, { recursive: true });
+  app.use(morgan('combined', {
+    stream: fs.createWriteStream(path.join(process.env.LOG_DIR, 'matching-service.log'), { flags: 'a' }),
+  }));
+}
 
 // Liveness/readiness: used by Docker and orchestrators. Not behind the internal key.
 app.get('/health', (req, res) => {

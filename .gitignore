@@ -3,3 +3,4 @@ node_modules/
 **/.env
 *.log
 .DS_Store
+k8s/00-secret.yaml

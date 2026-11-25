@@ -18,6 +18,15 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({ origin: (process.env.CORS_ORIGIN || '*').split(',') }));
 app.use(morgan('tiny'));
+// Also write access logs to a file when LOG_DIR is set (Kubernetes shared volume).
+if (process.env.LOG_DIR) {
+  const fs = require('fs');
+  const path = require('path');
+  fs.mkdirSync(process.env.LOG_DIR, { recursive: true });
+  app.use(morgan('combined', {
+    stream: fs.createWriteStream(path.join(process.env.LOG_DIR, 'api-gateway.log'), { flags: 'a' }),
+  }));
+}
 app.use(express.json({ limit: '100kb' }));
 app.use(rateLimit({ windowMs: 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }));
 

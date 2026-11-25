@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sports-config
+  namespace: sports-center
+data:
+  REGISTRATION_URL: "http://registration-service:3001"
+  AUTH_URL: "http://auth-service:3002"
+  FACILITY_URL: "http://facility-service:3003"
+  RESERVATION_URL: "http://reservation-service:3004"
+  MATCHING_URL: "http://matching-service:3005"
+  MAINTENANCE_URL: "http://maintenance-service:3006"
+  CORS_ORIGIN: "*"
+  JWT_EXPIRES_IN: "1h"
+  MAX_FAILED_LOGINS: "5"
+  MAX_BOOKING_HOURS: "4"
+  SYNC_INTERVAL_MS: "60000"
+  LOG_DIR: "/var/log/app"

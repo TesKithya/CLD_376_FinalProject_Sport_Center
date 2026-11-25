@@ -15,10 +15,10 @@ router.post('/', requireUser, c.create);
 
 router.get('/:id', (req, res, next) => {
   if (req.headers['x-user-role'] === 'system') {
-    return c.get(req, res, next);
+    return next();
   }
   return requireUser(req, res, next);
-});
+}, c.get);
 
 router.patch('/:id/cancel', requireUser, c.cancel);
 router.patch('/:id/matching', requireUser, c.setMatching);
